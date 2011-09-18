@@ -1,53 +1,23 @@
-import os
-import requests
-from subprocess import Popen
-
 from celery.task import task
+
 from django.conf import settings
 from django.utils import simplejson as json
 
 from .analyzers.loader import get_analyzers
+from .downloaders.base import DownloadError
+from .downloaders.loader import get_downloaders
 from .models import Fix
 from .parsers import Parser
 from .settings import CONFIG
 
 
-class DownloadError(Exception):
-    pass
-
-
 def download(url, repo_path):
-    user, repo = url.split('/')
-    # Get info about repo, we need python containing repos only
-    r = requests.get('https://api.github.com/repos/%s/languages' % url,
-                     timeout=CONFIG['GITHUB_TIMEOUT'])
-    if not r.ok or r.status_code != 200:
-        raise DownloadError('Not found')
-    data = json.loads(r.content)
-    if not 'Python' in data.keys():
-        raise DownloadError("Repo language hasn't Python code")
-
-    # Get branch to download
-    r = requests.get('https://api.github.com/repos/%s' % url,
-                     timeout=CONFIG['GITHUB_TIMEOUT'])
-    if not r.ok or r.status_code != 200:
-        raise DownloadError('Cannot fetch information about repo')
-    data = json.loads(r.content)
-    branch = data['master_branch'] or 'master'
-    tarball = 'https://github.com/%s/tarball/%s' % (url, branch)
-
-    # Donwload tarball with curl
-    if not os.path.exists(repo_path):
-        os.makedirs(repo_path)
-    filepath = os.path.join(repo_path, 'archive.tar.gz')
-    curl_string = 'curl %s --connect-timeout %d --max-filesize %d -L -s -o %s' % (
-        tarball, CONFIG['GITHUB_TIMEOUT'], CONFIG['MAX_TARBALL_SIZE'], filepath
-    )
-    if Popen(curl_string.split()).wait():
-        raise DownloadError("Can't download tarball")
-    if Popen(['tar', 'xf', filepath, '-C', repo_path]).wait():
-        raise DownloadError("Can't extract tarball")
-    os.unlink(filepath)
+    for downloader_class in get_downloaders():
+        downloader = downloader_class(url)
+        if downloader.can_process() and downloader.is_valid():
+            downloader.download(repo_path)
+            return
+    raise DownloadError("Can't process this url: %s" % url)
 
 
 def parse(path):
@@ -55,7 +25,7 @@ def parse(path):
 
 
 def analyze(code, path):
-    results = [] 
+    results = []
     for analyzer in get_analyzers():
         results.extend(analyzer(code, path).analyze())
     return results
@@ -65,7 +35,8 @@ def save_results(report, results):
     for result in results:
         source = json.dumps(result.source)
         solution = json.dumps(result.solution)
-        path = '/'.join(result.path.split('/')[1:]) # Remove archive dir name from result path
+        # Remove archive dir name from result path
+        path = '/'.join(result.path.split('/')[1:]) 
         Fix.objects.create(
             report=report, line=result.line, description=result.description,
             path=path, source=source, solution=solution
@@ -89,7 +60,7 @@ def process_report(report):
     report.stage = 'cloning'
     report.save()
     path = report.get_repo_path()
-    download(report.github_url, path)
+    download(report.url, path)
 
     report.stage = 'parsing'
     report.save()

@@ -3,11 +3,12 @@ from __future__ import with_statement
 import os
 import shutil
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from ..models import Report
 from ..settings import CONFIG
-from ..tasks import DownloadError, download
+from ..tasks import download
 
 
 class TasksTests(TestCase):
@@ -33,12 +34,12 @@ class TasksTests(TestCase):
 
     def test_download(self):
         path1 = self.report1.get_repo_path()
-        download(self.report1.github_url, path1)
+        download(self.report1.url, path1)
         self.assertTrue(os.path.exists(path1))
-        with self.assertRaises(DownloadError):
-            download(self.report2.github_url, self.report2.get_repo_path())
-        with self.assertRaises(DownloadError):
-            download(self.report3.github_url, self.report3.get_repo_path())
+        with self.assertRaises(ValidationError):
+            download(self.report2.url, self.report2.get_repo_path())
+        with self.assertRaises(ValidationError):
+            download(self.report3.url, self.report3.get_repo_path())
 
 
     def test_files_delete(self):
@@ -47,9 +48,9 @@ class TasksTests(TestCase):
         self.report1.stage = 'done'
         self.report1.save()
         self.assertFalse(os.path.exists(path1))
-        self.report1.stage = 'whait'
+        self.report1.stage = 'queue'
         self.report1.save()
-        download(self.report1.github_url, path1)
+        download(self.report1.url, path1)
         self.report1.error = 'error'
         self.report1.save()
         self.assertFalse(os.path.exists(path1))

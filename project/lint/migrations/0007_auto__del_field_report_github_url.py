@@ -1,24 +1,21 @@
 # encoding: utf-8
 import datetime
-import re
 from south.db import db
-from south.v2 import DataMigration
+from south.v2 import SchemaMigration
 from django.db import models
 
-from ..models import GITHUB_REGEXP
-
-
-class Migration(DataMigration):
+class Migration(SchemaMigration):
 
     def forwards(self, orm):
-        for report in orm.Report.objects.all():
-            match = re.match(GITHUB_REGEXP, report.url)
-            if match:
-                report.github_url = match.group(1)
-                report.save()
+        
+        # Deleting field 'Report.github_url'
+        db.delete_column('lint_report', 'github_url')
+
 
     def backwards(self, orm):
-        pass
+        
+        # Adding field 'Report.github_url'
+        db.add_column('lint_report', 'github_url', self.gf('django.db.models.fields.CharField')(default='', max_length=255), keep_default=False)
 
 
     models = {
@@ -36,7 +33,6 @@ class Migration(DataMigration):
             'Meta': {'ordering': "['-created_on']", 'object_name': 'Report'},
             'created_on': ('django.db.models.fields.DateTimeField', [], {'default': 'datetime.datetime.now'}),
             'error': ('django.db.models.fields.TextField', [], {'null': 'True', 'blank': 'True'}),
-            'github_url': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
             'hash': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '40'}),
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'stage': ('django.db.models.fields.CharField', [], {'default': "'queue'", 'max_length': '10'}),

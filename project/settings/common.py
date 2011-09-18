@@ -169,6 +169,10 @@ LINT_ANALYZERS = (
     'lint.analyzers.template_loaders.TemplateLoadersAnalyzer',
 )
 
+LINT_DOWNLOADERS = (
+    'lint.downloaders.github.GitHubDownloader',
+)
+
 
 import djcelery
 djcelery.setup_loader()

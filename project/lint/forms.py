@@ -4,7 +4,7 @@ from .models import Report
 
 class ReportForm(forms.ModelForm):
 
-    url = forms.URLField(
+    url = forms.CharField(
         initial = 'https://github.com/',
         widget = forms.TextInput(attrs={'class': 'url-field'}),
     )
